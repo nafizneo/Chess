@@ -3,48 +3,207 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flappy Evolution - CS Demo</title>
-	
-    <link rel="stylesheet" href="./style.css">
+    <title>GrandmasterJS - Advanced AI Chess</title>
+    <style>
+        :root {
+            --bg: #1a1a1a;
+            --board-light: #ebecd0;
+            --board-dark: #779556;
+            --highlight: rgba(255, 255, 0, 0.4);
+            --last-move: rgba(172, 195, 51, 0.5);
+            --accent: #3d85c6;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        #app-container {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            background: #2d2d2d;
+            border-radius: 12px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+        }
+
+        /* Chess Board */
+        #board-container {
+            position: relative;
+            width: 560px;
+            height: 560px;
+            user-select: none;
+        }
+
+        .board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            width: 100%;
+            height: 100%;
+            border: 4px solid #444;
+        }
+
+        .square {
+            width: 70px;
+            height: 70px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .square.light { background-color: var(--board-light); }
+        .square.dark { background-color: var(--board-dark); }
+
+        .square.selected { background-color: var(--highlight) !important; }
+        .square.last-move { background-color: var(--last-move) !important; }
+        
+        .legal-dot {
+            width: 20px;
+            height: 20px;
+            background: rgba(0,0,0,0.1);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .piece {
+            width: 60px;
+            height: 60px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            z-index: 2;
+            transition: transform 0.1s;
+        }
+
+        /* Sidebar */
+        #sidebar {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .panel {
+            background: #3d3d3d;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #444;
+        }
+
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 10px;
+            background: #444;
+        }
+
+        .move-history {
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 14px;
+            display: grid;
+            grid-template-columns: 30px 1fr 1fr;
+            gap: 5px;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        button {
+            padding: 10px;
+            border: none;
+            border-radius: 4px;
+            background: var(--accent);
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:hover { filter: brightness(1.1); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .eval-bar {
+            height: 10px;
+            background: #444;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        #eval-fill {
+            height: 100%;
+            width: 50%;
+            background: white;
+            transition: width 0.5s ease;
+        }
+
+        /* Piece Assets (Using Wikimedia Commons SVG) */
+        .wP { background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg'); }
+        .wR { background-image: url('https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg'); }
+        .wN { background-image: url('https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg'); }
+        .wB { background-image: url('https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg'); }
+        .wQ { background-image: url('https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg'); }
+        .wK { background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg'); }
+        .bP { background-image: url('https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg'); }
+        .bR { background-image: url('https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg'); }
+        .bN { background-image: url('https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg'); }
+        .bB { background-image: url('https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg'); }
+        .bQ { background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg'); }
+        .bK { background-image: url('https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg'); }
+    </style>
 </head>
 <body>
 
-<div id="game-container">
-    <canvas id="gameCanvas"></canvas>
-    
-    <div class="hud">
-        <div id="scoreDisplay">0</div>
-        <div id="highScoreDisplay" style="font-size: 18px; color: #eee; opacity: 0.8;">BEST: 0</div>
+<div id="app-container">
+    <div id="board-container">
+        <div id="main-board" class="board"></div>
     </div>
 
-    <!-- Start Menu -->
-    <div id="startMenu" class="ui-layer">
-        <div class="menu-overlay">
-            <h1 style="margin: 0; color: #f1c40f; font-size: 42px;">FLAPPY CS</h1>
-            <p>A Neural Network Evolution Demo</p>
-            <button onclick="game.start()">PLAY GAME</button>
-            <p style="font-size: 12px; margin-top: 15px; color: #aaa;">SPACE/CLICK to Jump | 'A' for AI Mode</p>
+    <div id="sidebar">
+        <div class="panel">
+            <div id="game-status" class="status-badge">WHITE TO MOVE</div>
+            <div class="eval-bar"><div id="eval-fill"></div></div>
+            <div id="eval-text" style="text-align: center; font-size: 12px;">Eval: 0.0</div>
+        </div>
+
+        <div class="panel">
+            <div style="margin-bottom: 5px; font-size: 12px; color: #aaa;">MOVE HISTORY</div>
+            <div id="history" class="move-history"></div>
+        </div>
+
+        <div class="panel controls">
+            <button onclick="gameUI.undo()">UNDO</button>
+            <button onclick="gameUI.reset()">RESET</button>
+            <button id="ai-toggle" onclick="gameUI.toggleAI()">AI: ON</button>
+            <select id="difficulty" onchange="gameUI.setDifficulty(this.value)">
+                <option value="2">Casual (D2)</option>
+                <option value="3" selected>Amateur (D3)</option>
+                <option value="4">Expert (D4)</option>
+            </select>
+        </div>
+
+        <div class="panel" style="font-size: 11px; color: #888;">
+            <strong>Engine:</strong> Minimax + Alpha-Beta Pruning<br>
+            <strong>Optimization:</strong> Move Ordering, PST, Transposition Table (Zobrist)
         </div>
     </div>
-
-    <!-- Ready Screen (The "Tap to Start" state) -->
-    <div id="readyScreen" class="ui-layer hidden">
-        <h2 style="font-size: 40px; text-shadow: 3px 3px 0 #000; margin-bottom: 80px;">GET READY</h2>
-        <div class="tap-indicator">TAP OR SPACE TO START</div>
-    </div>
-
-    <!-- Game Over -->
-    <div id="gameOverMenu" class="ui-layer hidden">
-        <div class="menu-overlay">
-            <h2 id="endStatus" style="color: #ff4757;">CRASHED!</h2>
-            <p id="finalScore" style="font-size: 24px;">Score: 0</p>
-            <button onclick="game.restart()">RETRY</button>
-        </div>
-    </div>
-
-    <div id="aiIndicator" class="ai-badge hidden">AI AUTOPILOT</div>
 </div>
 
-	<script src="./app.js"></script>
+<script src="./app.js">
+</script>
 </body>
 </html>
