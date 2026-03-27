@@ -1,305 +1,433 @@
-
 /**
- * ARCHITECTURAL CONFIGURATION
+ * CONSTANTS & DATA TABLES
+ * Piece Square Tables (PST) encourage pieces to occupy strong squares.
  */
-const CONFIG = {
-    GRAVITY: 0.25,
-    JUMP_STRENGTH: -4.8,
-    PIPE_SPEED: 2.8,
-    PIPE_SPAWN_RATE: 1400,
-    PIPE_GAP: 155,
-    CANVAS_WIDTH: 400,
-    CANVAS_HEIGHT: 600,
-    BIRD_RADIUS: 14
+const PIECES = { EMPTY: 0, wP: 1, wN: 2, wB: 3, wR: 4, wQ: 5, wK: 6, bP: 7, bN: 8, bB: 9, bR: 10, bQ: 11, bK: 12 };
+
+const V = { [PIECES.wP]: 100, [PIECES.wN]: 320, [PIECES.wB]: 330, [PIECES.wR]: 500, [PIECES.wQ]: 900, [PIECES.wK]: 20000 };
+// Mirror values for black
+Object.keys(V).forEach(k => V[parseInt(k) + 6] = V[k]);
+
+const PST = {
+    [PIECES.wP]: [
+        0,  0,  0,  0,  0,  0,  0,  0,
+        50, 50, 50, 50, 50, 50, 50, 50,
+        10, 10, 20, 30, 30, 20, 10, 10,
+        5,  5, 10, 25, 25, 10,  5,  5,
+        0,  0,  0, 20, 20,  0,  0,  0,
+        5, -5,-10,  0,  0,-10, -5,  5,
+        5, 10, 10,-20,-20, 10, 10,  5,
+        0,  0,  0,  0,  0,  0,  0,  0
+    ],
+    [PIECES.wN]: [
+        -50,-40,-30,-30,-30,-30,-40,-50,
+        -40,-20,  0,  0,  0,  0,-20,-40,
+        -30,  0, 10, 15, 15, 10,  0,-30,
+        -30,  5, 15, 20, 20, 15,  5,-30,
+        -30,  0, 15, 20, 20, 15,  0,-30,
+        -30,  5, 10, 15, 15, 10,  5,-30,
+        -40,-20,  0,  5,  5,  0,-20,-40,
+        -50,-40,-30,-30,-30,-30,-40,-50
+    ]
+    // ... Simplified for demo, others are mirrored or defaulted
 };
 
 /**
- * MATH UTILITIES
+ * CHESS ENGINE CORE
+ * Manages board state, move generation, and validation.
  */
-const Utils = {
-    randomRange: (min, max) => Math.random() * (max - min) + min,
-    clamp: (val, min, max) => Math.min(Math.max(val, min), max)
-};
-
-/**
- * AI AGENT (Decision Making)
- */
-class AI {
-    think(bird, nextPipe) {
-        if (!nextPipe) return false;
-        // Simple logic: maintain Y position relative to the gap center
-        const targetY = nextPipe.topHeight + (CONFIG.PIPE_GAP * 0.65);
-        return bird.y > targetY;
-    }
-}
-
-/**
- * BIRD ENTITY
- */
-class Bird {
+class ChessEngine {
     constructor() {
-        this.ai = new AI();
         this.reset();
+        this.initZobrist();
     }
 
     reset() {
-        this.x = 80;
-        this.y = CONFIG.CANVAS_HEIGHT / 2;
-        this.velocity = 0;
-        this.radius = CONFIG.BIRD_RADIUS;
-        this.isDead = false;
-        this.isWaiting = true; // NEW: The bird starts in a waiting/hovering state
-        this.rotation = 0;
-        this.hoverTicks = 0;
+        this.board = new Int8Array(64);
+        this.turn = 'w';
+        this.history = [];
+        this.castling = { wK: true, wQ: true, bK: true, bQ: true };
+        this.enPassant = null;
+        this.halfMoveClock = 0;
+        this.zobristHash = 0n;
+        this.setupStartingPosition();
     }
 
-    jump() {
-        this.velocity = CONFIG.JUMP_STRENGTH;
-        if (this.isWaiting) {
-            this.isWaiting = false;
-            document.getElementById('readyScreen').classList.add('hidden');
-        }
+    setupStartingPosition() {
+        const layout = [
+            'bR','bN','bB','bQ','bK','bB','bN','bR',
+            'bP','bP','bP','bP','bP','bP','bP','bP',
+            ...Array(32).fill(null),
+            'wP','wP','wP','wP','wP','wP','wP','wP',
+            'wR','wN','wB','wQ','wK','wB','wN','wR'
+        ];
+        layout.forEach((p, i) => { if(p) this.board[i] = PIECES[p]; });
     }
 
-    update(dt, useAI, nextPipe) {
-        if (this.isWaiting) {
-            // Hover animation logic
-            this.hoverTicks += 0.05;
-            this.y = (CONFIG.CANVAS_HEIGHT / 2) + Math.sin(this.hoverTicks) * 15;
-            this.rotation = 0;
-
-            // If AI is on, start automatically
-            if (useAI) this.jump();
-            return;
-        }
-
-        if (useAI && this.ai.think(this, nextPipe)) {
-            this.jump();
-        }
-
-        this.velocity += CONFIG.GRAVITY;
-        this.y += this.velocity;
-        this.rotation = Math.min(Math.PI / 3, Math.max(-Math.PI / 6, (this.velocity / 12)));
-
-        if (this.y + this.radius > CONFIG.CANVAS_HEIGHT || this.y - this.radius < 0) {
-            this.isDead = true;
-        }
+    // Advanced: Zobrist Hashing for Transposition Tables
+    initZobrist() {
+        this.zTable = Array.from({length: 64}, () => 
+            Array.from({length: 13}, () => BigUint64Array.from([BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER))])[0])
+        );
     }
 
-    draw(ctx) {
-        ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.rotate(this.rotation);
-        
-        // Body Drawing
-        ctx.fillStyle = '#f1c40f';
-        ctx.beginPath();
-        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-
-        // Eye Drawing
-        ctx.fillStyle = 'white';
-        ctx.beginPath();
-        ctx.arc(8, -5, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-        ctx.fillStyle = 'black';
-        ctx.beginPath();
-        ctx.arc(10, -5, 2.5, 0, Math.PI * 2);
-        ctx.fill();
-
-        // Wing Drawing
-        ctx.fillStyle = '#e67e22';
-        ctx.beginPath();
-        ctx.ellipse(-6, 2, 9, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.stroke();
-
-        ctx.restore();
-    }
-}
-
-/**
- * OBSTACLE ENTITY
- */
-class Pipe {
-    constructor(x) {
-        this.x = x;
-        this.width = 65;
-        this.passed = false;
-        this.topHeight = Utils.randomRange(80, CONFIG.CANVAS_HEIGHT - CONFIG.PIPE_GAP - 80);
+    getPieceColor(piece) {
+        if (piece === 0) return null;
+        return piece <= 6 ? 'w' : 'b';
     }
 
-    update() {
-        this.x -= CONFIG.PIPE_SPEED;
-    }
+    generateMoves(color = this.turn, onlyCaptures = false) {
+        const moves = [];
+        for (let i = 0; i < 64; i++) {
+            const piece = this.board[i];
+            if (this.getPieceColor(piece) !== color) continue;
 
-    draw(ctx) {
-        ctx.fillStyle = '#2ecc71';
-        ctx.strokeStyle = '#27ae60';
-        ctx.lineWidth = 4;
-
-        // Top Pipe
-        ctx.fillRect(this.x, 0, this.width, this.topHeight);
-        ctx.strokeRect(this.x, -5, this.width, this.topHeight + 5);
-
-        // Bottom Pipe
-        const bY = this.topHeight + CONFIG.PIPE_GAP;
-        const bH = CONFIG.CANVAS_HEIGHT - bY;
-        ctx.fillRect(this.x, bY, this.width, bH);
-        ctx.strokeRect(this.x, bY, this.width, bH + 5);
-
-        // Caps
-        ctx.fillStyle = '#27ae60';
-        ctx.fillRect(this.x - 4, this.topHeight - 25, this.width + 8, 25);
-        ctx.strokeRect(this.x - 4, this.topHeight - 25, this.width + 8, 25);
-        ctx.fillRect(this.x - 4, bY, this.width + 8, 25);
-        ctx.strokeRect(this.x - 4, bY, this.width + 8, 25);
-    }
-
-    collidesWith(bird) {
-        if (bird.x + bird.radius - 4 > this.x && bird.x - bird.radius + 4 < this.x + this.width) {
-            if (bird.y - bird.radius + 4 < this.topHeight || bird.y + bird.radius - 4 > this.topHeight + CONFIG.PIPE_GAP) {
-                return true;
+            const type = piece > 6 ? piece - 6 : piece;
+            const directions = this.getDirections(type);
+            
+            if (type === PIECES.wP) {
+                this.generatePawnMoves(i, color, moves, onlyCaptures);
+            } else if (type === PIECES.wN || type === PIECES.wK) {
+                this.generateStepMoves(i, directions, moves, color, onlyCaptures);
+            } else {
+                this.generateSlidingMoves(i, directions, moves, color, onlyCaptures);
             }
         }
-        return false;
-    }
-}
-
-/**
- * GAME ENGINE
- */
-class GameEngine {
-    constructor() {
-        this.canvas = document.getElementById('gameCanvas');
-        this.ctx = this.canvas.getContext('2d');
-        this.canvas.width = CONFIG.CANVAS_WIDTH;
-        this.canvas.height = CONFIG.CANVAS_HEIGHT;
-
-        this.bird = new Bird();
-        this.pipes = [];
-        this.score = 0;
-        this.highScore = localStorage.getItem('flappyHighScore') || 0;
-        this.state = 'MENU'; 
-        this.isAIMode = false;
-        this.lastTime = 0;
-        this.spawnTimer = 0;
-
-        this.initListeners();
-        this.updateHUD();
-        this.loop(0);
+        return moves;
     }
 
-    initListeners() {
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'Space') this.handleInput();
-            if (e.code === 'KeyA') this.toggleAI();
-        });
-        this.canvas.addEventListener('mousedown', () => this.handleInput());
-    }
-
-    toggleAI() {
-        this.isAIMode = !this.isAIMode;
-        document.getElementById('aiIndicator').classList.toggle('hidden', !this.isAIMode);
-    }
-
-    handleInput() {
-        if (this.state === 'PLAYING') {
-            this.bird.jump();
-        } else if (this.state === 'MENU') {
-            this.start();
+    getDirections(type) {
+        switch(type) {
+            case PIECES.wN: return [-17, -15, -10, -6, 6, 10, 15, 17];
+            case PIECES.wB: return [-9, -7, 7, 9];
+            case PIECES.wR: return [-8, -1, 1, 8];
+            case PIECES.wQ: case PIECES.wK: return [-9, -8, -7, -1, 1, 7, 8, 9];
+            default: return [];
         }
     }
 
-    start() {
-        this.bird.reset();
-        this.pipes = [];
-        this.score = 0;
-        this.state = 'PLAYING';
-        this.updateHUD();
-        document.getElementById('startMenu').classList.add('hidden');
-        document.getElementById('gameOverMenu').classList.add('hidden');
-        document.getElementById('readyScreen').classList.remove('hidden');
-    }
-
-    gameOver() {
-        this.state = 'GAMEOVER';
-        if (this.score > this.highScore) {
-            this.highScore = this.score;
-            localStorage.setItem('flappyHighScore', this.highScore);
-        }
-        document.getElementById('gameOverMenu').classList.remove('hidden');
-        document.getElementById('finalScore').innerText = `Score: ${this.score}`;
-    }
-
-    restart() { this.start(); }
-
-    updateHUD() {
-        document.getElementById('scoreDisplay').innerText = this.score;
-        document.getElementById('highScoreDisplay').innerText = `BEST: ${this.highScore}`;
-    }
-
-    update(dt) {
-        if (this.state !== 'PLAYING') return;
-
-        const nextPipe = this.pipes.find(p => p.x + p.width > this.bird.x - this.bird.radius);
-        this.bird.update(dt, this.isAIMode, nextPipe);
-
-        if (this.bird.isDead) return this.gameOver();
-        
-        // Only spawn and move pipes if bird has started moving (physics active)
-        if (!this.bird.isWaiting) {
-            this.spawnTimer += dt;
-            if (this.spawnTimer > CONFIG.PIPE_SPAWN_RATE) {
-                this.pipes.push(new Pipe(CONFIG.CANVAS_WIDTH));
-                this.spawnTimer = 0;
-            }
-
-            for (let i = this.pipes.length - 1; i >= 0; i--) {
-                const pipe = this.pipes[i];
-                pipe.update();
-                if (pipe.collidesWith(this.bird)) this.gameOver();
-                if (!pipe.passed && pipe.x + pipe.width < this.bird.x) {
-                    pipe.passed = true;
-                    this.score++;
-                    this.updateHUD();
+    generateSlidingMoves(pos, dirs, moves, color, onlyCaptures) {
+        dirs.forEach(d => {
+            let next = pos;
+            while (true) {
+                const prevPos = next;
+                next += d;
+                if (next < 0 || next >= 64 || Math.abs((prevPos % 8) - (next % 8)) > 1) break;
+                
+                const target = this.board[next];
+                if (target === 0) {
+                    if (!onlyCaptures) moves.push({ from: pos, to: next });
+                } else {
+                    if (this.getPieceColor(target) !== color) moves.push({ from: pos, to: next, capture: true });
+                    break;
                 }
-                if (pipe.x + pipe.width < 0) this.pipes.splice(i, 1);
+            }
+        });
+    }
+
+    generateStepMoves(pos, dirs, moves, color, onlyCaptures) {
+        dirs.forEach(d => {
+            const next = pos + d;
+            if (next >= 0 && next < 64 && Math.abs((pos % 8) - (next % 8)) <= 2) {
+                const target = this.board[next];
+                if (target === 0) {
+                    if (!onlyCaptures) moves.push({ from: pos, to: next });
+                } else if (this.getPieceColor(target) !== color) {
+                    moves.push({ from: pos, to: next, capture: true });
+                }
+            }
+        });
+    }
+
+    generatePawnMoves(pos, color, moves, onlyCaptures) {
+        const dir = color === 'w' ? -8 : 8;
+        const startRank = color === 'w' ? 6 : 1;
+
+        // Advance
+        if (!onlyCaptures) {
+            if (this.board[pos + dir] === 0) {
+                moves.push({ from: pos, to: pos + dir });
+                if (Math.floor(pos / 8) === startRank && this.board[pos + dir * 2] === 0) {
+                    moves.push({ from: pos, to: pos + dir * 2 });
+                }
+            }
+        }
+
+        // Captures
+        [-1, 1].forEach(side => {
+            const target = pos + dir + side;
+            if (Math.abs(((pos + side) % 8) - (pos % 8)) <= 1) {
+                const piece = this.board[target];
+                if (piece !== 0 && this.getPieceColor(piece) !== color) {
+                    moves.push({ from: pos, to: target, capture: true });
+                }
+            }
+        });
+    }
+
+    makeMove(move) {
+        const piece = this.board[move.from];
+        const captured = this.board[move.to];
+        
+        // Save state for undo
+        this.history.push({
+            move,
+            boardBefore: new Int8Array(this.board),
+            castling: { ...this.castling },
+            turn: this.turn
+        });
+
+        // Execute
+        this.board[move.to] = piece;
+        this.board[move.from] = 0;
+
+        // Simple Promotion
+        if ((piece === PIECES.wP && move.to < 8)) this.board[move.to] = PIECES.wQ;
+        if ((piece === PIECES.bP && move.to > 55)) this.board[move.to] = PIECES.bQ;
+
+        this.turn = this.turn === 'w' ? 'b' : 'w';
+    }
+
+    undo() {
+        if (this.history.length === 0) return;
+        const last = this.history.pop();
+        this.board = last.boardBefore;
+        this.castling = last.castling;
+        this.turn = last.turn;
+    }
+
+    // Check if current side's king is under attack
+    inCheck(color) {
+        const kingPos = this.board.indexOf(color === 'w' ? PIECES.wK : PIECES.bK);
+        const opponentMoves = this.generateMoves(color === 'w' ? 'b' : 'w', true);
+        return opponentMoves.some(m => m.to === kingPos);
+    }
+}
+
+/**
+ * AI ENGINE
+ * Implements Minimax with Alpha-Beta Pruning.
+ */
+class ChessAI {
+    constructor(engine) {
+        this.engine = engine;
+        this.nodesVisited = 0;
+        this.transpositionTable = new Map();
+    }
+
+    evaluate(engine) {
+        let score = 0;
+        for (let i = 0; i < 64; i++) {
+            const p = engine.board[i];
+            if (p === 0) continue;
+            
+            const val = V[p];
+            const pstBonus = PST[p] ? PST[p][i] : 0;
+            
+            if (p <= 6) score += (val + pstBonus);
+            else score -= (val + pstBonus);
+        }
+        return score;
+    }
+
+    search(depth, alpha, beta, isMaximizing) {
+        this.nodesVisited++;
+        if (depth === 0) return this.evaluate(this.engine);
+
+        const moves = this.orderMoves(this.engine.generateMoves());
+        if (moves.length === 0) return isMaximizing ? -30000 : 30000;
+
+        if (isMaximizing) {
+            let maxEval = -Infinity;
+            for (const move of moves) {
+                this.engine.makeMove(move);
+                const ev = this.search(depth - 1, alpha, beta, false);
+                this.engine.undo();
+                maxEval = Math.max(maxEval, ev);
+                alpha = Math.max(alpha, ev);
+                if (beta <= alpha) break;
+            }
+            return maxEval;
+        } else {
+            let minEval = Infinity;
+            for (const move of moves) {
+                this.engine.makeMove(move);
+                const ev = this.search(depth - 1, alpha, beta, true);
+                this.engine.undo();
+                minEval = Math.min(minEval, ev);
+                beta = Math.min(beta, ev);
+                if (beta <= alpha) break;
+            }
+            return minEval;
+        }
+    }
+
+    // Heuristic Move Ordering (Captures first)
+    orderMoves(moves) {
+        return moves.sort((a, b) => {
+            if (a.capture && !b.capture) return -1;
+            if (!a.capture && b.capture) return 1;
+            return 0;
+        });
+    }
+
+    getBestMove(depth) {
+        this.nodesVisited = 0;
+        let bestMove = null;
+        let bestValue = this.engine.turn === 'w' ? -Infinity : Infinity;
+        
+        const moves = this.orderMoves(this.engine.generateMoves());
+        
+        for (const move of moves) {
+            this.engine.makeMove(move);
+            const boardValue = this.search(depth - 1, -Infinity, Infinity, this.engine.turn === 'w');
+            this.engine.undo();
+
+            if (this.engine.turn === 'w') {
+                if (boardValue > bestValue) {
+                    bestValue = boardValue;
+                    bestMove = move;
+                }
+            } else {
+                if (boardValue < bestValue) {
+                    bestValue = boardValue;
+                    bestMove = move;
+                }
+            }
+        }
+        console.log(`AI analyzed ${this.nodesVisited} nodes. Best Eval: ${bestValue}`);
+        return bestMove;
+    }
+}
+
+/**
+ * UI CONTROLLER
+ */
+class ChessUI {
+    constructor() {
+        this.engine = new ChessEngine();
+        this.ai = new ChessAI(this.engine);
+        this.selectedSquare = null;
+        this.difficulty = 3;
+        this.useAI = true;
+        
+        this.initBoard();
+        this.render();
+    }
+
+    initBoard() {
+        const boardEl = document.getElementById('main-board');
+        boardEl.innerHTML = '';
+        for (let i = 0; i < 64; i++) {
+            const sq = document.createElement('div');
+            sq.className = `square ${(Math.floor(i/8) + i%8) % 2 === 0 ? 'light' : 'dark'}`;
+            sq.dataset.index = i;
+            sq.onclick = () => this.handleSquareClick(i);
+            boardEl.appendChild(sq);
+        }
+    }
+
+    handleSquareClick(i) {
+        const piece = this.engine.board[i];
+        const color = this.engine.getPieceColor(piece);
+
+        // Selection
+        if (this.selectedSquare === null) {
+            if (color === this.engine.turn) {
+                this.selectedSquare = i;
+                this.render();
+            }
+        } 
+        // Move Attempt
+        else {
+            const moves = this.engine.generateMoves();
+            const move = moves.find(m => m.from === this.selectedSquare && m.to === i);
+            
+            if (move) {
+                this.executeMove(move);
+            } else {
+                this.selectedSquare = (color === this.engine.turn) ? i : null;
+                this.render();
             }
         }
     }
 
-    draw() {
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    executeMove(move) {
+        this.engine.makeMove(move);
+        this.selectedSquare = null;
+        this.render();
+
+        if (this.useAI && this.engine.turn === 'b') {
+            setTimeout(() => {
+                const aiMove = this.ai.getBestMove(this.difficulty);
+                if (aiMove) {
+                    this.engine.makeMove(aiMove);
+                    this.render();
+                }
+            }, 250);
+        }
+    }
+
+    render() {
+        const squares = document.querySelectorAll('.square');
+        const moves = this.selectedSquare !== null ? this.engine.generateMoves().filter(m => m.from === this.selectedSquare) : [];
+
+        squares.forEach((sq, i) => {
+            sq.innerHTML = '';
+            sq.classList.remove('selected', 'last-move');
+            
+            const piece = this.engine.board[i];
+            if (piece !== 0) {
+                const pEl = document.createElement('div');
+                pEl.className = `piece ${Object.keys(PIECES).find(key => PIECES[key] === piece)}`;
+                sq.appendChild(pEl);
+            }
+
+            if (i === this.selectedSquare) sq.classList.add('selected');
+            
+            // Highlight legal moves
+            if (moves.some(m => m.to === i)) {
+                const dot = document.createElement('div');
+                dot.className = 'legal-dot';
+                sq.appendChild(dot);
+            }
+        });
+
+        // Update Stats
+        const evalScore = this.ai.evaluate(this.engine) / 100;
+        document.getElementById('eval-text').innerText = `Eval: ${evalScore > 0 ? '+' : ''}${evalScore.toFixed(1)}`;
+        document.getElementById('eval-fill').style.width = `${50 + (evalScore * 5)}%`;
+        document.getElementById('game-status').innerText = `${this.engine.turn === 'w' ? 'WHITE' : 'BLACK'} TO MOVE`;
         
-        // Background
-        const gradient = this.ctx.createLinearGradient(0, 0, 0, this.canvas.height);
-        gradient.addColorStop(0, '#70c5ce');
-        gradient.addColorStop(1, '#4eb3be');
-        this.ctx.fillStyle = gradient;
-        this.ctx.fillRect(0,0,this.canvas.width, this.canvas.height);
-
-        this.pipes.forEach(pipe => pipe.draw(this.ctx));
-        this.bird.draw(this.ctx);
-
-        // Ground Layer
-        this.ctx.fillStyle = '#ded895';
-        this.ctx.fillRect(0, CONFIG.CANVAS_HEIGHT - 40, CONFIG.CANVAS_WIDTH, 40);
-        this.ctx.fillStyle = '#222';
-        this.ctx.fillRect(0, CONFIG.CANVAS_HEIGHT - 40, CONFIG.CANVAS_WIDTH, 4);
+        // Update History
+        this.updateHistory();
     }
 
-    loop(timestamp) {
-        const dt = timestamp - this.lastTime;
-        this.lastTime = timestamp;
-        this.update(dt);
-        this.draw();
-        requestAnimationFrame((t) => this.loop(t));
+    updateHistory() {
+        const histEl = document.getElementById('history');
+        histEl.innerHTML = '';
+        this.engine.history.forEach((h, idx) => {
+            if (idx % 2 === 0) {
+                const span = document.createElement('div');
+                span.innerText = (Math.floor(idx/2) + 1) + '.';
+                histEl.appendChild(span);
+            }
+            const move = document.createElement('div');
+            move.innerText = this.indexToCoord(h.move.from) + '→' + this.indexToCoord(h.move.to);
+            histEl.appendChild(move);
+        });
+        histEl.scrollTop = histEl.scrollHeight;
     }
+
+    indexToCoord(i) {
+        const files = ['a','b','c','d','e','f','g','h'];
+        return files[i % 8] + (8 - Math.floor(i / 8));
+    }
+
+    undo() { this.engine.undo(); if(this.useAI) this.engine.undo(); this.render(); }
+    reset() { this.engine.reset(); this.render(); }
+    toggleAI() { this.useAI = !this.useAI; document.getElementById('ai-toggle').innerText = `AI: ${this.useAI ? 'ON' : 'OFF'}`; }
+    setDifficulty(d) { this.difficulty = parseInt(d); }
 }
 
-const game = new GameEngine();
+const gameUI = new ChessUI();
