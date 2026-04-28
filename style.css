@@ -1,159 +1,183 @@
- :root {
-            --bg: #1a1a1a;
-            --board-light: #ebecd0;
-            --board-dark: #779556;
-            --highlight: rgba(255, 255, 0, 0.4);
-            --last-move: rgba(172, 195, 51, 0.5);
-            --accent: #3d85c6;
-        }
+:root {
+    --bg: #1a1a1a;
+    --panel-bg: #2d2d2d;
+    --board-light: #ebecd0;
+    --board-dark: #779556;
+    --highlight: rgba(255, 255, 0, 0.4);
+    --accent: #3d85c6;
+}
 
-        body {
-            background-color: var(--bg);
-            color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
-        }
+* { box-sizing: border-box; }
 
-        #app-container {
-            display: flex;
-            gap: 20px;
-            padding: 20px;
-            background: #2d2d2d;
-            border-radius: 12px;
-            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-        }
+body {
+    background-color: var(--bg);
+    color: white;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 10px;
+}
 
-        /* Chess Board */
-        #board-container {
-            position: relative;
-            width: 560px;
-            height: 560px;
-            user-select: none;
-        }
+#app-container {
+    display: flex;
+    flex-direction: column; /* Mobile default: stack vertically */
+    gap: 15px;
+    width: 100%;
+    max-width: 1000px;
+    align-items: center;
+}
 
-        .board {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            width: 100%;
-            height: 100%;
-            border: 4px solid #444;
-        }
+/* Board Responsiveness */
+#board-outer {
+    width: 100%;
+    max-width: 560px; /* Cap size on desktop */
+    aspect-ratio: 1 / 1;
+    position: relative;
+}
 
-        .square {
-            width: 70px;
-            height: 70px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            cursor: pointer;
-        }
+.board {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    width: 100%;
+    height: 100%;
+    border: 4px solid #444;
+    user-select: none;
+    touch-action: manipulation;
+}
 
-        .square.light { background-color: var(--board-light); }
-        .square.dark { background-color: var(--board-dark); }
+.square {
+    aspect-ratio: 1 / 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    cursor: pointer;
+}
 
-        .square.selected { background-color: var(--highlight) !important; }
-        .square.last-move { background-color: var(--last-move) !important; }
-        
-        .legal-dot {
-            width: 20px;
-            height: 20px;
-            background: rgba(0,0,0,0.1);
-            border-radius: 50%;
-            pointer-events: none;
-        }
+.square.light { background-color: var(--board-light); }
+.square.dark { background-color: var(--board-dark); }
+.square.selected { background-color: var(--highlight) !important; }
 
-        .piece {
-            width: 60px;
-            height: 60px;
-            background-size: contain;
-            background-repeat: no-repeat;
-            z-index: 2;
-            transition: transform 0.1s;
-        }
+.piece {
+    width: 90%;
+    height: 90%;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    z-index: 2;
+}
 
-        /* Sidebar */
-        #sidebar {
-            width: 300px;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
+.legal-dot {
+    width: 25%;
+    height: 25%;
+    background: rgba(0,0,0,0.15);
+    border-radius: 50%;
+}
 
-        .panel {
-            background: #3d3d3d;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #444;
-        }
+/* Sidebar & Panels */
+#sidebar {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
 
-        .status-badge {
-            padding: 5px 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 10px;
-            background: #444;
-        }
+.panel {
+    background: var(--panel-bg);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #444;
+}
 
-        .move-history {
-            height: 200px;
-            overflow-y: auto;
-            font-family: monospace;
-            font-size: 14px;
-            display: grid;
-            grid-template-columns: 30px 1fr 1fr;
-            gap: 5px;
-        }
+.stats-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
 
-        .controls {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-        }
+.status-badge {
+    font-weight: bold;
+    font-size: 14px;
+    margin-bottom: 8px;
+}
 
-        button {
-            padding: 10px;
-            border: none;
-            border-radius: 4px;
-            background: var(--accent);
-            color: white;
-            cursor: pointer;
-            font-weight: bold;
-        }
+.eval-container { width: 100%; text-align: center; }
 
-        button:hover { filter: brightness(1.1); }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
+.eval-bar {
+    height: 8px;
+    background: #444;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 5px 0;
+}
+#eval-fill {
+    height: 100%;
+    width: 50%;
+    background: white;
+    transition: width 0.5s ease;
+}
 
-        .eval-bar {
-            height: 10px;
-            background: #444;
-            border-radius: 5px;
-            overflow: hidden;
-            margin: 10px 0;
-        }
-        #eval-fill {
-            height: 100%;
-            width: 50%;
-            background: white;
-            transition: width 0.5s ease;
-        }
+.move-history {
+    height: 120px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 13px;
+    display: grid;
+    grid-template-columns: 30px 1fr 1fr;
+    gap: 5px;
+}
 
-        /* Piece Assets (Using Wikimedia Commons SVG) */
-        .wP { background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg'); }
-        .wR { background-image: url('https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg'); }
-        .wN { background-image: url('https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg'); }
-        .wB { background-image: url('https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg'); }
-        .wQ { background-image: url('https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg'); }
-        .wK { background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg'); }
-        .bP { background-image: url('https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg'); }
-        .bR { background-image: url('https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg'); }
-        .bN { background-image: url('https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg'); }
-        .bB { background-image: url('https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg'); }
-        .bQ { background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg'); }
-        .bK { background-image: url('https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg'); }
+.controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+button, select {
+    padding: 12px 5px; /* Larger tap targets */
+    border: none;
+    border-radius: 6px;
+    background: var(--accent);
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 14px;
+    appearance: none;
+    text-align: center;
+}
+
+select {
+    background-color: #555;
+}
+
+/* Desktop Adjustments */
+@media (min-width: 850px) {
+    body { align-items: center; }
+    #app-container {
+        flex-direction: row; /* Side by side on big screens */
+        align-items: flex-start;
+        padding: 20px;
+    }
+    #sidebar {
+        width: 300px;
+    }
+    .move-history {
+        height: 300px;
+    }
+}
+
+/* Piece Assets */
+.wP { background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/45/Chess_plt45.svg'); }
+.wR { background-image: url('https://upload.wikimedia.org/wikipedia/commons/7/72/Chess_rlt45.svg'); }
+.wN { background-image: url('https://upload.wikimedia.org/wikipedia/commons/7/70/Chess_nlt45.svg'); }
+.wB { background-image: url('https://upload.wikimedia.org/wikipedia/commons/b/b1/Chess_blt45.svg'); }
+.wQ { background-image: url('https://upload.wikimedia.org/wikipedia/commons/1/15/Chess_qlt45.svg'); }
+.wK { background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg'); }
+.bP { background-image: url('https://upload.wikimedia.org/wikipedia/commons/c/c7/Chess_pdt45.svg'); }
+.bR { background-image: url('https://upload.wikimedia.org/wikipedia/commons/f/ff/Chess_rdt45.svg'); }
+.bN { background-image: url('https://upload.wikimedia.org/wikipedia/commons/e/ef/Chess_ndt45.svg'); }
+.bB { background-image: url('https://upload.wikimedia.org/wikipedia/commons/9/98/Chess_bdt45.svg'); }
+.bQ { background-image: url('https://upload.wikimedia.org/wikipedia/commons/4/47/Chess_qdt45.svg'); }
+.bK { background-image: url('https://upload.wikimedia.org/wikipedia/commons/f/f0/Chess_kdt45.svg'); }
