@@ -2,26 +2,28 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GrandmasterJS - Advanced AI Chess</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GrandmasterJS - Mobile Optimized</title>
     <link rel="stylesheet" href="./style.css"/>
 </head>
 <body>
 
 <div id="app-container">
-    <div id="board-container">
+    <div id="board-outer">
         <div id="main-board" class="board"></div>
     </div>
 
     <div id="sidebar">
-        <div class="panel">
+        <div class="panel stats-panel">
             <div id="game-status" class="status-badge">WHITE TO MOVE</div>
-            <div class="eval-bar"><div id="eval-fill"></div></div>
-            <div id="eval-text" style="text-align: center; font-size: 12px;">Eval: 0.0</div>
+            <div class="eval-container">
+                <div class="eval-bar"><div id="eval-fill"></div></div>
+                <div id="eval-text">Eval: 0.0</div>
+            </div>
         </div>
 
-        <div class="panel">
-            <div style="margin-bottom: 5px; font-size: 12px; color: #aaa;">MOVE HISTORY</div>
+        <div class="panel history-panel">
+            <div class="panel-label">MOVE HISTORY</div>
             <div id="history" class="move-history"></div>
         </div>
 
@@ -35,15 +37,9 @@
                 <option value="4">Expert (D4)</option>
             </select>
         </div>
-
-        <div class="panel" style="font-size: 11px; color: #888;">
-            <strong>Engine:</strong> Minimax + Alpha-Beta Pruning<br>
-            <strong>Optimization:</strong> Move Ordering, PST, Transposition Table (Zobrist)
-        </div>
     </div>
 </div>
 
-<script src="./app.js">
-</script>
+<script src="./app.js"></script>
 </body>
 </html>
